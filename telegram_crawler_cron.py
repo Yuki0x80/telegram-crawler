@@ -89,7 +89,7 @@ class TelegramCrawlerCron:
             return datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
 
     def _add_timestamp_to_filename(self, filepath):
-        """ファイル名の先頭に日時を追加"""
+        """ファイル名の先頭に日時を追加（JSONL形式に変換）"""
         # ディレクトリとファイル名を分離
         directory = os.path.dirname(filepath)
         filename = os.path.basename(filepath)
@@ -100,6 +100,10 @@ class TelegramCrawlerCron:
         
         # ファイル名と拡張子を分離
         name, ext = os.path.splitext(filename)
+        
+        # JSONL形式に変更（拡張子を.jsonlに）
+        if ext == '.json':
+            ext = '.jsonl'
         
         # 日時を先頭に追加したファイル名を作成
         new_filename = f"{timestamp}_{name}{ext}"
@@ -117,7 +121,7 @@ class TelegramCrawlerCron:
             f.write(current_time.isoformat())
     
     def save_messages_to_file(self):
-        """すべてのメッセージをJSONファイルに保存"""
+        """すべてのメッセージをJSONLファイルに保存（各行が1つのJSONオブジェクト）"""
         try:
             # ディレクトリが存在しない場合は作成
             output_dir = os.path.dirname(self.output_file)
@@ -125,32 +129,32 @@ class TelegramCrawlerCron:
                 os.makedirs(output_dir, exist_ok=True)
                 print(f"ディレクトリを作成しました: {output_dir}")
             
-            # 既存のファイルがある場合は読み込む
-            all_data = []
+            # 既存のファイルがある場合は読み込む（JSONL形式）
+            existing_count = 0
             if os.path.exists(self.output_file):
                 try:
                     with open(self.output_file, 'r', encoding='utf-8') as f:
-                        existing_data = json.load(f)
-                        if isinstance(existing_data, list):
-                            all_data = existing_data
-                        else:
-                            all_data = [existing_data]
-                    print(f"既存のファイルを読み込みました: {len(all_data)}件のメッセージ")
+                        for line in f:
+                            line = line.strip()
+                            if line:  # 空行をスキップ
+                                existing_count += 1
+                    print(f"既存のファイルを読み込みました: {existing_count}件のメッセージ")
                 except Exception as e:
-                    # ファイルが壊れている場合は空のリストから開始
+                    # ファイルが壊れている場合は新規作成
                     print(f"警告: 既存ファイルの読み込みに失敗しました（新規作成します）: {e}")
-                    all_data = []
+                    existing_count = 0
             
-            # 新しいメッセージを追加
-            all_data.extend(self.all_messages)
+            # JSONL形式で保存（追記モード）
+            with open(self.output_file, 'a', encoding='utf-8') as f:
+                for message_log in self.all_messages:
+                    # 各メッセージを1行のJSONとして書き込み
+                    json_line = json.dumps(message_log, ensure_ascii=False)
+                    f.write(json_line + '\n')
             
-            # ファイルに保存（追記ではなく上書き）
-            with open(self.output_file, 'w', encoding='utf-8') as f:
-                json.dump(all_data, f, indent=2, ensure_ascii=False)
-            
-            print(f"JSONファイルに保存しました: {self.output_file} ({len(self.all_messages)}件のメッセージ、合計: {len(all_data)}件)")
+            total_count = existing_count + len(self.all_messages)
+            print(f"JSONLファイルに保存しました: {self.output_file} ({len(self.all_messages)}件のメッセージを追加、合計: {total_count}件)")
         except Exception as e:
-            print(f"エラー: JSONファイルの保存に失敗しました: {e}")
+            print(f"エラー: JSONLファイルの保存に失敗しました: {e}")
             traceback.print_exc()
 
     async def process_message(self, message: Message, channel_id: int):
@@ -335,10 +339,6 @@ class TelegramCrawlerCron:
                     }
             message_logs[channel_id]["bot"] = sender_is_bot  # True if sender is bot
 
-            # output:JSON
-            json_telegram_message_data = json.dumps(message_logs, indent=2, ensure_ascii=False)
-            # pprint.pprint(json_telegram_message_data)  # ファイルに保存するため、コンソール出力は不要
-            
             # メッセージをリストに追加（後でファイルに保存）
             self.all_messages.append(message_logs)
         except Exception as e:
