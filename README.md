@@ -34,6 +34,61 @@ $ python telegram_crawler.py
 > Please enter your phone (or bot token): <phone number>
 ```
 
+### Cronで定期実行（Ubuntu/Linux）
+
+#### 1. プロジェクトの配置場所
+
+推奨配置場所：
+- `/opt/telegram-crawler/` （システム全体で使用する場合）
+- `/home/username/telegram-crawler/` （ユーザー専用の場合）
+
+```bash
+# プロジェクトを配置
+sudo mkdir -p /opt/telegram-crawler
+sudo cp -r telegram-crawler/* /opt/telegram-crawler/
+cd /opt/telegram-crawler
+
+# 依存関係のインストール
+sudo pip3 install -r requirements.txt
+
+# 初回実行（認証用）
+sudo python3 telegram_crawler_cron.py
+```
+
+#### 2. Cronの設定
+
+```bash
+# Cron設定を編集
+crontab -e
+
+# 例: 毎時0分に実行
+0 * * * * cd /opt/telegram-crawler && /usr/bin/python3 telegram_crawler_cron.py >> /var/log/telegram-crawler.log 2>&1
+
+# 例: 30分ごとに実行
+*/30 * * * * cd /opt/telegram-crawler && /usr/bin/python3 telegram_crawler_cron.py >> /var/log/telegram-crawler.log 2>&1
+
+# 例: 毎日午前2時に実行
+0 2 * * * cd /opt/telegram-crawler && /usr/bin/python3 telegram_crawler_cron.py >> /var/log/telegram-crawler.log 2>&1
+```
+
+#### 3. ログの確認
+
+```bash
+# 実行ログを確認
+tail -f /var/log/telegram-crawler.log
+
+# または、ユーザーディレクトリにログを保存する場合
+# crontab -e で以下に変更:
+# 0 * * * * cd /opt/telegram-crawler && /usr/bin/python3 telegram_crawler_cron.py >> ~/telegram-crawler.log 2>&1
+```
+
+#### 4. 注意事項
+
+- **パスの指定**: Cronでは環境変数が限定的なため、`/usr/bin/python3`のように絶対パスを使用
+- **作業ディレクトリ**: `cd /opt/telegram-crawler`で作業ディレクトリを指定（`config.ini`の読み込みのため）
+- **権限**: セッションファイル（`CAnonBot.session`）や出力ファイルの書き込み権限を確認
+- **環境変数**: 必要に応じてCronの環境変数を設定
+
 ## Output
 
 ### Output Format
